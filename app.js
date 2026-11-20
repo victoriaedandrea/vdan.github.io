@@ -1,6 +1,10 @@
 (() => {
 'use strict';
 
+/* Optional fallback proxy URL if a direct browser request fails with a CORS/network error
+   and the profile itself has no proxyUrl set. Leave '' if you do not have a proxy yet. */
+const DEFAULT_CORS_PROXY = '';
+
 /* Built-in API profiles and catalogs for Italian Tourism, Geospatial, Macroeconomic & Context APIs.
    m = method, p = path, s = summary, q = query params, r = required query params, b = takes a body, h = headers, dv = default values, bd = default body */
 const BUILTIN_PROFILES = [
@@ -9,6 +13,7 @@ const BUILTIN_PROFILES = [
     name: '1. ISTAT SDMX REST API',
     baseUrl: 'https://esploradati.istat.it',
     prefix: '/SDMXWS/rest/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'dataflow/IT1/DCSC_TUR',
     extraHeaders: 'Accept: application/vnd.sdmx.data+json;version=1.0.0-wd',
@@ -23,6 +28,7 @@ const BUILTIN_PROFILES = [
     name: '1. Eurostat Dissemination API',
     baseUrl: 'https://ec.europa.eu',
     prefix: '/eurostat/api/dissemination/statistics/1.0/data/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'tour_occ_nim?geo=IT&sinceTimePeriod=2024-01',
     extraHeaders: '',
@@ -38,6 +44,7 @@ const BUILTIN_PROFILES = [
     name: '1. Bank of Italy (BDS) API',
     baseUrl: 'https://a2a.bancaditalia.it',
     prefix: '/infostat/dataservices/export/IT/CSV/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: '',
     extraHeaders: 'Accept: text/csv, application/json',
@@ -51,6 +58,7 @@ const BUILTIN_PROFILES = [
     name: '1. Dati.gov.it & Min. Turismo (CKAN)',
     baseUrl: 'https://www.dati.gov.it',
     prefix: '/opendata/api/3/action/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'package_search?q=turismo&rows=1',
     extraHeaders: '',
@@ -65,6 +73,7 @@ const BUILTIN_PROFILES = [
     name: '2. Amadeus for Developers',
     baseUrl: 'https://test.api.amadeus.com',
     prefix: '/v2/',
+    proxyUrl: '',
     auth: { type: 'bearer', name: '' },
     pingPath: '',
     extraHeaders: '',
@@ -79,6 +88,7 @@ const BUILTIN_PROFILES = [
     name: '2. Inside Airbnb (Open Data)',
     baseUrl: 'https://data.insideairbnb.com',
     prefix: '/italy/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: '',
     extraHeaders: 'Accept: text/csv, application/geo+json',
@@ -93,6 +103,7 @@ const BUILTIN_PROFILES = [
     name: '3. Overpass API (OpenStreetMap)',
     baseUrl: 'https://overpass-api.de',
     prefix: '/api/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'status',
     extraHeaders: 'User-Agent: ItalyTourismAnalyticsDashboard/1.0',
@@ -106,6 +117,7 @@ const BUILTIN_PROFILES = [
     name: '3. Foursquare Places API',
     baseUrl: 'https://api.foursquare.com',
     prefix: '/v3/',
+    proxyUrl: '',
     auth: { type: 'header', name: 'Authorization' },
     pingPath: 'places/search?near=Rome,IT&limit=1',
     extraHeaders: '',
@@ -119,6 +131,7 @@ const BUILTIN_PROFILES = [
     name: '3. Google Places API (New)',
     baseUrl: 'https://places.googleapis.com',
     prefix: '/v1/',
+    proxyUrl: '',
     auth: { type: 'header', name: 'X-Goog-Api-Key' },
     pingPath: '',
     extraHeaders: 'X-Goog-FieldMask: places.id,places.displayName,places.rating,places.userRatingCount,places.formattedAddress',
@@ -133,6 +146,7 @@ const BUILTIN_PROFILES = [
     name: '3. Geoapify Places API',
     baseUrl: 'https://api.geoapify.com',
     prefix: '/v2/',
+    proxyUrl: '',
     auth: { type: 'query', name: 'apiKey' },
     pingPath: 'places?categories=tourism&filter=rect:12.45,41.88,12.51,41.92&limit=1',
     extraHeaders: '',
@@ -146,6 +160,7 @@ const BUILTIN_PROFILES = [
     name: '4. Open-Meteo Historical Weather',
     baseUrl: 'https://archive-api.open-meteo.com',
     prefix: '/v1/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'archive?latitude=41.9028&longitude=12.4964&start_date=2024-07-01&end_date=2024-07-02&daily=temperature_2m_max',
     extraHeaders: '',
@@ -159,6 +174,7 @@ const BUILTIN_PROFILES = [
     name: '4. Frankfurter Exchange Rates (ECB)',
     baseUrl: 'https://api.frankfurter.app',
     prefix: '/',
+    proxyUrl: '',
     auth: { type: 'none', name: '' },
     pingPath: 'latest?from=USD&to=EUR',
     extraHeaders: '',
@@ -301,8 +317,10 @@ const CATEGORY_META = {
 const BUILTIN_IDS = new Set(BUILTIN_PROFILES.map(p => p.id));
 const DEFAULT_ID = BUILTIN_PROFILES[0].id;
 
-const BLANK = { baseUrl: '', prefix: '', auth: { type: 'bearer', name: '' }, pingPath: '', extraHeaders: '',
-  totalItems: '', totalPages: '', pageParam: '', itemsParam: '', overview: null };
+const BLANK = {
+  baseUrl: '', prefix: '', proxyUrl: '', auth: { type: 'bearer', name: '' }, pingPath: '', extraHeaders: '',
+  totalItems: '', totalPages: '', pageParam: '', itemsParam: '', overview: null
+};
 const AUTH_TYPES = [
   ['header', 'API key in a header'], ['bearer', 'Bearer token'], ['basic', 'Basic (username:password)'],
   ['query', 'API key in the query string'], ['none', 'No authentication']
@@ -342,14 +360,16 @@ const state = {
 const K = { profiles: 'apisbx:profiles', active: 'apisbx:active', cat: id => 'apisbx:cat:' + id, tok: id => 'apisbx:token:' + id };
 function loadProfiles() {
   const stored = (jparse(store.get(localStorage, K.profiles)) || []).filter(p => p.id !== 'configio');
-  const out = BUILTIN_PROFILES.map(bp => Object.assign({}, bp, stored.find(p => p.id === bp.id) || {}));
+  const out = BUILTIN_PROFILES.map(bp => Object.assign({}, BLANK, bp, stored.find(p => p.id === bp.id) || {}));
   for (const p of stored) if (!BUILTIN_IDS.has(p.id)) out.push(Object.assign({}, BLANK, p));
   state.profiles = out;
 }
 const saveProfiles = () => store.set(localStorage, K.profiles, JSON.stringify(state.profiles));
 function normEp(e) {
-  return { m: (e.m || 'GET').toUpperCase(), p: (e.p || '').replace(/^\/+/, ''), s: e.s || e.p || '', q: e.q || [], r: e.r || [],
-    b: !!e.b, h: e.h || [], dv: e.dv || {}, bd: e.bd || '' };
+  return {
+    m: (e.m || 'GET').toUpperCase(), p: (e.p || '').replace(/^\/+/, ''), s: e.s || e.p || '', q: e.q || [], r: e.r || [],
+    b: !!e.b, h: e.h || [], dv: e.dv || {}, bd: e.bd || ''
+  };
 }
 function setCatalog(groups) {
   state.catalog = groups.map(g => ({ group: g.group, endpoints: g.endpoints.map(normEp) }));
@@ -412,11 +432,38 @@ function tokenLabel() {
   return { header: a.name || 'API key', bearer: 'Bearer token', basic: 'username:password', query: a.name || 'API key', none: 'No credential needed' }[a.type] || 'Token';
 }
 
+function buildProxiedFetch(proxyUrl, method, url, headers, body) {
+  const p = proxyUrl.trim();
+  const targetUrl = `${p}${p.includes('?') ? '&' : '?'}url=${encodeURIComponent(url)}`;
+  if (method === 'GET' && !Object.keys(headers).length && body == null) {
+    return fetch(targetUrl, { method: 'GET' });
+  }
+  return fetch(targetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, method, headers, body })
+  });
+}
+
 async function request(method, url, { headers = {}, body } = {}, onWait) {
+  const explicitProxy = (state.profile && state.profile.proxyUrl ? state.profile.proxyUrl : '').trim();
   let attempt = 0;
   for (;;) {
     const t0 = performance.now();
-    const res = await fetch(url, { method, headers, body });
+    let res;
+    if (explicitProxy) {
+      res = await buildProxiedFetch(explicitProxy, method, url, headers, body);
+    } else {
+      try {
+        res = await fetch(url, { method, headers, body });
+      } catch (err) {
+        if (DEFAULT_CORS_PROXY.trim()) {
+          res = await buildProxiedFetch(DEFAULT_CORS_PROXY, method, url, headers, body);
+        } else {
+          throw err;
+        }
+      }
+    }
     const ms = Math.round(performance.now() - t0);
     if (res.status === 429 && method === 'GET' && attempt < 3) {
       const ra = Number(res.headers.get('Retry-After'));
@@ -510,10 +557,10 @@ function networkHelp() {
   return el('div', { class: 'notice bad' },
     el('strong', { text: 'The browser could not reach the API.' }),
     el('ul', {},
-      el('li', { text: 'The API may not allow browser requests from this site (CORS). The Network tab shows a failed preflight request when this is the cause.' }),
+      el('li', { text: 'The API may not allow browser requests from this site (CORS). Open Settings and set a CORS / Relay Proxy URL to route requests through a proxy instead of Postman.' }),
       el('li', { text: 'The API address may be wrong. Include the scheme and any base path, for example https://api.example.com/v2.' }),
-      el('li', { text: 'The API may only accept approved IP addresses. Your public IP may need to be on its allowlist.' }),
-      el('li', { text: 'If it is CORS, the same request still works from Postman. Use “Postman collection” on the Overview page to export one.' })));
+      el('li', { text: 'The API may only accept approved IP addresses, or you may be hitting a per-minute rate limit (such as Istat SDMX’s limit).' }),
+      el('li', { text: 'Click “Copy as cURL” on any endpoint if you want to run the exact command from your terminal.' })));
 }
 
 /* ---------- sidebar ---------- */
@@ -551,7 +598,6 @@ function showOverview(extra) {
   const authMode = (P.auth || {}).type || 'none';
   const authLabel = authMode === 'none' ? 'Public (No Key)' : authMode.toUpperCase();
 
-  // Header + Quick Actions
   main.append(el('div', { class: 'dash-head' },
     el('div', { class: 'intro' },
       el('span', { class: 'eyebrow', text: 'ITALIAN TOURISM & MACROECONOMIC DATA HUB' }),
@@ -559,10 +605,8 @@ function showOverview(extra) {
       el('p', { class: 'muted', text: `${P.baseUrl || 'No base URL set'}${prefixStr()}` })),
     el('div', { class: 'btnrow' },
       el('button', { class: 'btn primary', type: 'button', onclick: openFree }, 'Custom request'),
-      el('button', { class: 'btn', type: 'button', onclick: openSettings }, 'Settings'),
-      state.ALL.length ? el('button', { class: 'btn', type: 'button', onclick: () => download(slug() + '.postman_collection.json', postmanCollection()) }, 'Export Postman') : null)));
+      el('button', { class: 'btn', type: 'button', onclick: openSettings }, 'Settings'))));
 
-  // Top KPI Strip
   main.append(el('div', { class: 'kpi-grid' },
     el('div', { class: 'kpi-card' },
       el('span', { class: 'kpi-label', text: 'Active API Endpoints' }),
@@ -589,7 +633,6 @@ function showOverview(extra) {
       el('p', { text: 'Paste your API key or token in the top bar and click Connect, or select a Public API card below.' })));
   }
 
-  // Active API Quick-Launch Endpoint Cards
   if (state.ALL.length) {
     main.append(el('h2', { class: 'dash-sec-title', text: 'Endpoints in Selected API' }));
     const epGrid = el('div', { class: 'ep-cards' });
@@ -609,7 +652,6 @@ function showOverview(extra) {
     main.append(epGrid);
   }
 
-  // All 12 APIs Switcher Grid grouped by Domain
   main.append(el('h2', { class: 'dash-sec-title', text: 'All Tourism & Context Data Sources' }));
   const apiGrid = el('div', { class: 'api-grid' });
   for (const prof of state.profiles) {
@@ -632,13 +674,6 @@ function showOverview(extra) {
       el('span', { class: 'api-tile-meta', text: epCount ? `${epCount} endpoint(s)` : 'Custom catalog' })));
   }
   main.append(apiGrid);
-}
-
-function openList(path) {
-  const ep = state.ALL.find(e => e.p === path);
-  if (!ep) return;
-  selectEndpoint(ep);
-  if (state.connected && ep.m === 'GET' && pathParams(ep).length === 0 && ep.r.length === 0) send();
 }
 
 /* ---------- request builder ---------- */
@@ -871,49 +906,6 @@ async function copyCurl() {
   setTimeout(() => { const b = $('#curlBtn'); if (b) b.textContent = 'Copy as cURL'; }, 1500);
 }
 
-/* ---------- Postman export ---------- */
-const slug = () => (state.profile.name || 'api').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'api';
-function download(name, obj) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
-  const a = el('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-function postmanCollection() {
-  const P = state.profile, a = P.auth || { type: 'none' };
-  const pre = (P.prefix || '').split('/').filter(Boolean), extra = extraHeaders(P.extraHeaders);
-  const item = e => {
-    const segs = [...pre, ...e.p.split('/').filter(Boolean)].map(s => s.replace(/\{([^}/]+)\}/g, ':$1'));
-    const query = e.q.map(k => ({ key: k, value: String(e.dv[k] ?? ''), disabled: !e.r.includes(k) }));
-    const header = [{ key: 'Accept', value: 'application/json' },
-      ...Object.entries(extra).map(([key, value]) => ({ key, value })),
-      ...e.h.map(k => ({ key: k, value: String(e.dv[k] ?? ''), disabled: !e.r.includes(k) }))];
-    const on = query.filter(x => !x.disabled).map(x => `${x.key}=${x.value}`).join('&');
-    const req = { method: e.m, header, url: { raw: '{{baseUrl}}/' + segs.join('/') + (on ? '?' + on : ''), host: ['{{baseUrl}}'], path: segs } };
-    if (query.length) req.url.query = query;
-    const pv = [...e.p.matchAll(/\{([^}/]+)\}/g)].map(m => ({ key: m[1], value: '' }));
-    if (pv.length) req.url.variable = pv;
-    if (e.b) { header.push({ key: 'Content-Type', value: 'application/json' }); req.body = { mode: 'raw', raw: e.bd || '{}', options: { raw: { language: 'json' } } }; }
-    return { name: `${e.m} ${e.s}`, request: req };
-  };
-  const col = {
-    info: { name: P.name + ' sandbox', description: `Exported from API sandbox.`,
-      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
-    item: state.catalog.map(g => ({ name: g.group, item: g.endpoints.map(item) }))
-  };
-  if (a.type === 'header') col.auth = { type: 'apikey', apikey: [{ key: 'key', value: a.name || 'X-API-Key', type: 'string' }, { key: 'value', value: '{{token}}', type: 'string' }, { key: 'in', value: 'header', type: 'string' }] };
-  if (a.type === 'query') col.auth = { type: 'apikey', apikey: [{ key: 'key', value: a.name || 'api_key', type: 'string' }, { key: 'value', value: '{{token}}', type: 'string' }, { key: 'in', value: 'query', type: 'string' }] };
-  if (a.type === 'bearer') col.auth = { type: 'bearer', bearer: [{ key: 'token', value: '{{token}}', type: 'string' }] };
-  if (a.type === 'basic') col.auth = { type: 'basic', basic: [{ key: 'username', value: '{{username}}', type: 'string' }, { key: 'password', value: '{{password}}', type: 'string' }] };
-  return col;
-}
-function postmanEnvironment() {
-  const P = state.profile, a = P.auth || { type: 'none' };
-  const vals = [{ key: 'baseUrl', value: base() || P.baseUrl || '', type: 'default', enabled: true }];
-  if (a.type === 'basic') vals.push({ key: 'username', value: '', type: 'default', enabled: true }, { key: 'password', value: '', type: 'secret', enabled: true });
-  else if (a.type !== 'none') vals.push({ key: 'token', value: '', type: 'secret', enabled: true });
-  return { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), name: P.name, values: vals, _postman_variable_scope: 'environment' };
-}
-
 /* ---------- spec import ---------- */
 function deref(o, spec) {
   let n = 0;
@@ -1044,7 +1036,8 @@ function syncAuthNameVisibility() {
 function openSettings() {
   const P = state.profile;
   $('#sName').value = P.name; $('#sAuthType').value = (P.auth || {}).type || 'none'; $('#sAuthName').value = (P.auth || {}).name || '';
-  $('#sPrefix').value = P.prefix || ''; $('#sPing').value = P.pingPath || ''; $('#sHeaders').value = P.extraHeaders || '';
+  $('#sPrefix').value = P.prefix || ''; $('#sPing').value = P.pingPath || ''; $('#sProxyUrl').value = P.proxyUrl || '';
+  $('#sHeaders').value = P.extraHeaders || '';
   $('#sPageParam').value = P.pageParam || ''; $('#sItemsParam').value = P.itemsParam || '';
   $('#sTotalItems').value = P.totalItems || ''; $('#sTotalPages').value = P.totalPages || '';
   $('#sSpecUrl').value = ''; $('#sSpecText').value = ''; $('#sSpecFile').value = '';
@@ -1061,7 +1054,7 @@ $('#dlgForm').addEventListener('submit', e => {
   e.preventDefault();
   const P = state.profile, t = v => $(v).value.trim();
   P.name = t('#sName') || 'API'; P.auth = { type: $('#sAuthType').value, name: t('#sAuthName') };
-  P.prefix = t('#sPrefix'); P.pingPath = t('#sPing'); P.extraHeaders = $('#sHeaders').value.trim();
+  P.prefix = t('#sPrefix'); P.pingPath = t('#sPing'); P.proxyUrl = t('#sProxyUrl'); P.extraHeaders = $('#sHeaders').value.trim();
   P.pageParam = t('#sPageParam'); P.itemsParam = t('#sItemsParam'); P.totalItems = t('#sTotalItems'); P.totalPages = t('#sTotalPages');
   P.baseUrl = base(); saveProfiles(); dlg.close();
   renderProfileSelect(); $('#tokenLabel').textContent = tokenLabel();
