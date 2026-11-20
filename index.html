@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<noscript>This dashboard needs JavaScript.</noscript>
+<div class="app" id="app">
+  <header class="top">
+    <button class="icon-btn" id="navToggle" type="button" aria-label="Show or hide the endpoint list">Endpoints</button>
+    <div class="brand"><strong>API sandbox</strong><span id="envLabel">not connected</span></div>
+    <form class="conn" id="connForm" autocomplete="off">
+      <label>Connection<select id="profile" aria-label="Connection"></select></label>
+      <label>API address<input id="baseUrl" type="url" required placeholder="https://api.example.com"></label>
+      <label><span id="tokenLabel">Token</span><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your credential"></label>
+      <label class="chk"><input id="remember" type="checkbox"> Keep for this tab</label>
+      <button class="btn primary" type="submit">Connect</button>
+      <button class="btn" id="settingsBtn" type="button">Settings</button>
+    </form>
+    <div class="status" id="status" role="status" aria-live="polite">Not connected</div>
+    <label class="writes"><input type="checkbox" id="allowWrites"> Allow changes (POST, PUT, PATCH, DELETE)</label>
+  </header>
+
+  <nav class="side" id="side" aria-label="Endpoints">
+    <input type="search" id="filter" placeholder="Filter endpoints" aria-label="Filter endpoints">
+    <button class="navbtn active" id="homeBtn" type="button">Overview</button>
+    <button class="navbtn sub" id="freeBtn" type="button">Custom request</button>
+    <hr>
+    <div id="nav"></div>
+  </nav>
+
+  <main id="main"></main>
+</div>
+
+<dialog class="dlg" id="dlg" aria-labelledby="dlgTitle">
+  <form id="dlgForm" method="dialog">
+    <header><h2 id="dlgTitle">Connection settings</h2>
+      <p class="note">Saved in this browser only. Tokens are never saved here.</p></header>
+    <div class="body">
+      <fieldset><legend>Connection</legend>
+        <label class="f">Name<input type="text" id="sName" required></label>
+        <div class="two">
+          <label class="f">Authentication<select id="sAuthType"></select></label>
+          <label class="f" id="sAuthNameWrap">Header or parameter name<input type="text" id="sAuthName" placeholder="X-API-Key"></label>
+        </div>
+        <div class="two">
+          <label class="f">Path before every endpoint<input type="text" id="sPrefix" placeholder="/ (usually blank)"></label>
+          <label class="f">Test request (optional)<input type="text" id="sPing" placeholder="health"></label>
+        </div>
+        <label class="f">Extra headers, one per line (Name: value)<textarea id="sHeaders" spellcheck="false" placeholder="Accept-Language: en"></textarea></label>
+        <p class="note">Don’t put secrets in extra headers. They are saved in your browser.</p>
+      </fieldset>
+      <fieldset><legend>Paging (optional)</legend>
+        <div class="two">
+          <label class="f">Page
