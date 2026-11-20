@@ -40,8 +40,10 @@
 
 <dialog class="dlg" id="dlg" aria-labelledby="dlgTitle">
   <form id="dlgForm" method="dialog">
-    <header><h2 id="dlgTitle">Connection settings</h2>
-      <p class="note">Saved in this browser only. Tokens are never saved here.</p></header>
+    <header>
+      <h2 id="dlgTitle">Connection settings</h2>
+      <p class="note">Saved in this browser only. Tokens are never saved here.</p>
+    </header>
     <div class="body">
       <fieldset><legend>Connection</legend>
         <label class="f">Name<input type="text" id="sName" required></label>
@@ -56,6 +58,40 @@
         <label class="f">Extra headers, one per line (Name: value)<textarea id="sHeaders" spellcheck="false" placeholder="Accept-Language: en"></textarea></label>
         <p class="note">Don’t put secrets in extra headers. They are saved in your browser.</p>
       </fieldset>
+
       <fieldset><legend>Paging (optional)</legend>
         <div class="two">
-          <label class="f">Page
+          <label class="f">Page parameter<input type="text" id="sPageParam" placeholder="page"></label>
+          <label class="f">Items per page parameter<input type="text" id="sItemsParam" placeholder="limit"></label>
+        </div>
+        <div class="two">
+          <label class="f">Total items header<input type="text" id="sTotalItems" placeholder="X-Total-Count"></label>
+          <label class="f">Total pages header<input type="text" id="sTotalPages" placeholder="X-Total-Pages"></label>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Import endpoints (OpenAPI or Postman)</legend>
+        <div class="two">
+          <label class="f">Spec URL<input type="url" id="sSpecUrl" placeholder="https://example.com/openapi.json"></label>
+          <div class="field"><label>&nbsp;</label><button class="btn" id="sLoadUrl" type="button">Load URL</button></div>
+        </div>
+        <label class="f">Upload JSON or YAML file<input type="file" id="sSpecFile" accept=".json,.yaml,.yml"></label>
+        <label class="f">Or paste JSON / YAML spec<textarea id="sSpecText" spellcheck="false" placeholder="Paste OpenAPI or Postman JSON/YAML"></textarea></label>
+        <div class="btnrow">
+          <button class="btn" id="sImportText" type="button">Import pasted spec</button>
+          <button class="btn" id="sClear" type="button">Clear endpoints</button>
+        </div>
+        <p class="note" id="sSpecStatus"></p>
+      </fieldset>
+    </div>
+    <footer>
+      <button class="btn" id="sDelete" type="button">Delete connection</button>
+      <button class="btn" id="sClose" type="button">Close</button>
+      <button class="btn primary" type="submit">Save</button>
+    </footer>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
