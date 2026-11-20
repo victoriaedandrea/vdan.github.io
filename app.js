@@ -291,6 +291,13 @@ const BUILTIN_CATALOGS = {
   ]
 };
 
+const CATEGORY_META = {
+  '1.': { label: 'Official Statistics & Macro', desc: 'ISTAT, Eurostat, Bank of Italy & Dati.gov.it' },
+  '2.': { label: 'Travel, Flights & Accommodation', desc: 'Amadeus pricing & Inside Airbnb snapshots' },
+  '3.': { label: 'Geospatial, Venues & Landmarks', desc: 'OpenStreetMap, Foursquare, Google Places & Geoapify' },
+  '4.': { label: 'Climate & Currency Context', desc: 'Open-Meteo weather archive & ECB exchange rates' }
+};
+
 const BUILTIN_IDS = new Set(BUILTIN_PROFILES.map(p => p.id));
 const DEFAULT_ID = BUILTIN_PROFILES[0].id;
 
@@ -354,8 +361,7 @@ function loadCatalogFor(p) {
   setCatalog(stored || (BUILTIN_CATALOGS[p.id] || []));
 }
 function persistCatalog(groups) {
-  const ok = store.set(localStorage, K.cat(state.profile.id), JSON.stringify(groups));
-  return ok;
+  return store.set(localStorage, K.cat(state.profile.id), JSON.stringify(groups));
 }
 
 /* ---------- request helpers ---------- */
@@ -535,63 +541,104 @@ $('#homeBtn').addEventListener('click', () => { showOverview(); $('#app').classL
 $('#freeBtn').addEventListener('click', () => { openFree(); $('#app').classList.remove('nav-open'); });
 $('#navToggle').addEventListener('click', () => $('#app').classList.toggle('nav-open'));
 
-/* ---------- overview ---------- */
+/* ---------- visual overview dashboard ---------- */
 function showOverview(extra) {
   state.ep = null; markNav();
   const P = state.profile, main = $('#main'); main.replaceChildren();
-  main.append(el('div', { class: 'intro' },
-    el('h1', { text: P.name }),
-    el('p', { class: 'muted', text: state.ALL.length
-      ? `${state.ALL.length} endpoints in ${state.catalog.length} groups. Choose one on the left, fill in its parameters and send. Requests go straight from this browser to the API.`
-      : 'No endpoints are loaded for this connection yet.' })));
+
+  const totalCatalogEndpoints = Object.values(BUILTIN_CATALOGS)
+    .reduce((sum, groups) => sum + groups.reduce((gSum, g) => gSum + g.endpoints.length, 0), 0);
+  const authMode = (P.auth || {}).type || 'none';
+  const authLabel = authMode === 'none' ? 'Public (No Key)' : authMode.toUpperCase();
+
+  // Header + Quick Actions
+  main.append(el('div', { class: 'dash-head' },
+    el('div', { class: 'intro' },
+      el('span', { class: 'eyebrow', text: 'ITALIAN TOURISM & MACROECONOMIC DATA HUB' }),
+      el('h1', { text: P.name }),
+      el('p', { class: 'muted', text: `${P.baseUrl || 'No base URL set'}${prefixStr()}` })),
+    el('div', { class: 'btnrow' },
+      el('button', { class: 'btn primary', type: 'button', onclick: openFree }, 'Custom request'),
+      el('button', { class: 'btn', type: 'button', onclick: openSettings }, 'Settings'),
+      state.ALL.length ? el('button', { class: 'btn', type: 'button', onclick: () => download(slug() + '.postman_collection.json', postmanCollection()) }, 'Export Postman') : null)));
+
+  // Top KPI Strip
+  main.append(el('div', { class: 'kpi-grid' },
+    el('div', { class: 'kpi-card' },
+      el('span', { class: 'kpi-label', text: 'Active API Endpoints' }),
+      el('strong', { class: 'kpi-value', text: String(state.ALL.length) }),
+      el('span', { class: 'kpi-sub', text: `Across ${state.catalog.length} group(s)` })),
+    el('div', { class: 'kpi-card' },
+      el('span', { class: 'kpi-label', text: 'Authentication' }),
+      el('strong', { class: 'kpi-value', text: authLabel }),
+      el('span', { class: 'kpi-sub', text: authMode === 'none' ? 'Ready for direct GET queries' : `Requires ${tokenLabel()}` })),
+    el('div', { class: 'kpi-card' },
+      el('span', { class: 'kpi-label', text: 'Connection Status' }),
+      el('strong', { class: 'kpi-value ' + (state.connected ? 'ok-txt' : 'warn-txt'), text: state.connected ? 'Ready' : 'Credential Needed' }),
+      el('span', { class: 'kpi-sub', text: P.pingPath ? `Test: ${P.pingPath.split('?')[0]}` : 'No ping endpoint configured' })),
+    el('div', { class: 'kpi-card' },
+      el('span', { class: 'kpi-label', text: 'Total Catalog Coverage' }),
+      el('strong', { class: 'kpi-value', text: `${state.profiles.length} APIs` }),
+      el('span', { class: 'kpi-sub', text: `${totalCatalogEndpoints} pre-configured endpoints` }))));
+
   if (extra) main.append(extra);
+
   if (!state.connected) {
     main.append(el('div', { class: 'notice' },
-      el('strong', { text: 'Connect to get started.' }),
-      el('p', { text: 'Enter the API address and credential above, then choose Connect. The credential stays in this page and is never written to the URL or to GitHub.' })));
+      el('strong', { text: 'Credential required for this API.' }),
+      el('p', { text: 'Paste your API key or token in the top bar and click Connect, or select a Public API card below.' })));
   }
-  if (!state.ALL.length) {
-    main.append(el('div', { class: 'notice' },
-      el('strong', { text: 'Load an API description.' }),
-      el('p', { text: 'Open Settings and load an OpenAPI, Swagger or Postman file. Or send a custom request without one.' })));
-  }
-  if (P.overview && state.ALL.length) {
-    const list = el('ul', { class: 'rows' });
-    for (const [label, path] of P.overview) {
-      const count = el('span', { class: 'count', 'data-count': path, text: '—' });
-      list.append(el('li', {}, el('span', { text: label }), count, el('button', { class: 'linkbtn', type: 'button', onclick: () => openList(path) }, 'Open')));
+
+  // Active API Quick-Launch Endpoint Cards
+  if (state.ALL.length) {
+    main.append(el('h2', { class: 'dash-sec-title', text: 'Endpoints in Selected API' }));
+    const epGrid = el('div', { class: 'ep-cards' });
+    for (const ep of state.ALL) {
+      const canQuickRun = state.connected && ep.m === 'GET' && pathParams(ep).length === 0 && ep.r.every(k => ep.dv[k] !== undefined);
+      epGrid.append(el('div', { class: 'ep-card' },
+        el('div', { class: 'ep-card-top' },
+          el('span', { class: 'm ' + ep.m.toLowerCase(), text: ep.m }),
+          el('code', { class: 'ep-card-path', text: ep.p })),
+        el('p', { class: 'ep-card-desc', text: ep.s }),
+        el('div', { class: 'ep-card-foot' },
+          el('span', { class: 'muted', text: ep.group }),
+          el('div', { class: 'ep-card-btns' },
+            canQuickRun ? el('button', { class: 'btn small primary', type: 'button', onclick: () => { selectEndpoint(ep); send(); } }, 'Run now') : null,
+            el('button', { class: 'btn small', type: 'button', onclick: () => selectEndpoint(ep) }, 'Configure')))));
     }
-    main.append(list);
-    if (P.totalItems) main.append(el('p', { class: 'muted', style: 'margin-top:14px;max-width:64ch', text: `Counts come from the ${P.totalItems} response header. They show a dash if the API does not expose that header to the browser.` }));
+    main.append(epGrid);
   }
-  main.append(el('div', { class: 'btnrow' },
-    el('button', { class: 'btn', type: 'button', onclick: openFree }, 'Custom request'),
-    el('button', { class: 'btn', type: 'button', onclick: openSettings }, 'Settings'),
-    state.ALL.length ? el('button', { class: 'btn', type: 'button', onclick: () => download(slug() + '.postman_collection.json', postmanCollection()) }, 'Postman collection') : null,
-    el('button', { class: 'btn', type: 'button', onclick: () => download(slug() + '.postman_environment.json', postmanEnvironment()) }, 'Postman environment')));
-  main.append(el('p', { class: 'muted section', text: 'In Postman, choose Import and select both downloaded files, then pick the environment and paste your credential into its token variable.' }));
-  if (state.connected && P.overview && P.itemsParam && P.totalItems && state.ALL.length) loadCounts();
+
+  // All 12 APIs Switcher Grid grouped by Domain
+  main.append(el('h2', { class: 'dash-sec-title', text: 'All Tourism & Context Data Sources' }));
+  const apiGrid = el('div', { class: 'api-grid' });
+  for (const prof of state.profiles) {
+    const isCurrent = prof.id === P.id;
+    const isPublic = (prof.auth || {}).type === 'none';
+    const catKey = prof.name.slice(0, 2);
+    const domain = CATEGORY_META[catKey] ? CATEGORY_META[catKey].label : 'Custom Connection';
+    const epCount = (BUILTIN_CATALOGS[prof.id] || []).reduce((a, g) => a + g.endpoints.length, 0);
+
+    apiGrid.append(el('button', {
+      type: 'button',
+      class: 'api-tile' + (isCurrent ? ' active' : ''),
+      onclick: () => switchProfile(prof.id)
+    },
+      el('div', { class: 'api-tile-top' },
+        el('span', { class: 'api-domain', text: domain }),
+        el('span', { class: 'pill ' + (isPublic ? 'pub' : 'key'), text: isPublic ? 'Public' : 'API Key' })),
+      el('strong', { class: 'api-tile-name', text: prof.name }),
+      el('span', { class: 'api-tile-url', text: prof.baseUrl || 'Custom URL' }),
+      el('span', { class: 'api-tile-meta', text: epCount ? `${epCount} endpoint(s)` : 'Custom catalog' })));
+  }
+  main.append(apiGrid);
 }
+
 function openList(path) {
   const ep = state.ALL.find(e => e.p === path);
   if (!ep) return;
   selectEndpoint(ep);
   if (state.connected && ep.m === 'GET' && pathParams(ep).length === 0 && ep.r.length === 0) send();
-}
-async function loadCounts() {
-  const P = state.profile, cells = [...document.querySelectorAll('[data-count]')]; let i = 0;
-  const worker = async () => {
-    while (i < cells.length) {
-      const c = cells[i++];
-      try {
-        const r = await apiGet(c.dataset.count, { [P.itemsParam]: 1 }, () => { c.textContent = 'waiting…'; });
-        const n = P.totalItems ? r.headers.get(P.totalItems) : null;
-        c.textContent = !r.ok ? String(r.status) : (n != null ? Number(n).toLocaleString() : '—');
-        if (!r.ok) c.title = explain(r.status);
-      } catch { c.textContent = 'error'; }
-    }
-  };
-  await Promise.all([worker(), worker(), worker()]);
 }
 
 /* ---------- request builder ---------- */
@@ -648,6 +695,7 @@ function renderBuilder() {
     el('div', { class: 'actions' },
       el('button', { class: 'btn primary', id: 'sendBtn', type: 'button', onclick: send }, 'Send request'),
       el('button', { class: 'btn', id: 'curlBtn', type: 'button', onclick: copyCurl }, 'Copy as cURL'),
+      el('button', { class: 'btn', type: 'button', onclick: showOverview }, 'Back to Dashboard'),
       el('span', { class: 'hint', id: 'hint' })),
     el('div', { class: 'cols' },
       el('section', { class: 'pane' }, el('h2', { text: ep.s }), el('p', { class: 'muted', text: ep.group }), fields),
@@ -848,7 +896,7 @@ function postmanCollection() {
     return { name: `${e.m} ${e.s}`, request: req };
   };
   const col = {
-    info: { name: P.name + ' sandbox', description: `Exported from API sandbox. Select the environment, paste your credential into its token variable, and check baseUrl before sending write requests.`,
+    info: { name: P.name + ' sandbox', description: `Exported from API sandbox.`,
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
     item: state.catalog.map(g => ({ name: g.group, item: g.endpoints.map(item) }))
   };
